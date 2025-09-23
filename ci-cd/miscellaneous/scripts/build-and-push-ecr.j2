@@ -1,0 +1,121 @@
+set -e
+
+export IMAGE_TAG=build-$BITBUCKET_BUILD_NUMBER
+export ECR_URI=$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com/$ECR_REPOSITORY
+export VERSION_COUNTER_PARAM="/ecr/image/version-counter"
+export KEEP_IMAGES=15
+
+echo ""
+echo ""
+echo ""
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo "▶ Installing AWS CLI                         "
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo ""
+echo ""
+echo ""
+
+yum install -y unzip curl jq >/dev/null
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+unzip -qq awscliv2.zip
+./aws/install
+export PATH=$PATH:/usr/local/bin
+
+echo ""
+echo ""
+echo ""
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo "▶ Logging into Amazon ECR                    "
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo ""
+echo ""
+
+aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $ECR_URI
+
+echo ""
+echo ""
+echo ""
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo "▶ Fetching version tag from SSM              "
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo ""
+
+VERSION_TAG=$(aws ssm get-parameter --name "$VERSION_COUNTER_PARAM" --with-decryption --query "Parameter.Value" --output text 2>/dev/null || echo "0")
+NEXT_VERSION_TAG=$((VERSION_TAG + 1))
+VERSION_IMAGE_TAG="v$NEXT_VERSION_TAG"
+
+echo "▶ Incremented version tag: $VERSION_IMAGE_TAG"
+
+aws ssm put-parameter \
+  --name "$VERSION_COUNTER_PARAM" \
+  --type String \
+  --value "$NEXT_VERSION_TAG" \
+  --overwrite
+
+echo ""
+echo ""
+echo ""
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo "▶ Building Docker Image                      "
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo ""
+
+docker build \
+  -t $ECR_URI:$IMAGE_TAG \
+  -t $ECR_URI:latest \
+  -t $ECR_URI:$VERSION_IMAGE_TAG \
+  .
+
+echo ""
+echo ""
+echo ""
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo "▶ Pushing Docker Image to Amazon ECR         "
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo ""
+
+docker push $ECR_URI:$IMAGE_TAG
+docker push $ECR_URI:latest
+docker push $ECR_URI:$VERSION_IMAGE_TAG
+
+echo ""
+echo ""
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo "▶ Cleaning up old ECR images (keep $KEEP_IMAGES latest)"
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo ""
+
+# Get all image tags (excluding 'latest')
+ALL_IMAGES=$(aws ecr list-images \
+  --repository-name "$ECR_REPOSITORY" \
+  --region "$AWS_DEFAULT_REGION" \
+  --query 'imageIds[*].imageTag' \
+  --output text | tr '\t' '\n' | grep -v 'latest' | sort -V)
+
+# Count total
+TOTAL_IMAGES=$(echo "$ALL_IMAGES" | wc -l)
+
+# Determine how many to delete
+NUM_TO_DELETE=$((TOTAL_IMAGES - KEEP_IMAGES))
+
+if [ "$NUM_TO_DELETE" -gt 0 ]; then
+  echo "▶ Deleting $NUM_TO_DELETE old images..."
+  IMAGES_TO_DELETE=$(echo "$ALL_IMAGES" | head -n $NUM_TO_DELETE)
+
+  for TAG in $IMAGES_TO_DELETE; do
+    echo "🗑️  Deleting image: $TAG"
+    aws ecr batch-delete-image \
+      --repository-name "$ECR_REPOSITORY" \
+      --region "$AWS_DEFAULT_REGION" \
+      --image-ids imageTag=$TAG
+  done
+else
+  echo "✅ Fewer than $KEEP_IMAGES images found. No cleanup needed."
+fi
+
+echo ""
+echo ""
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo "▶ Triggering ECS Deploy Script               "
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo ""

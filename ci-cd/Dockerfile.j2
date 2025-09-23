@@ -1,0 +1,47 @@
+FROM amazonlinux:2 AS runtime
+
+
+COPY miscellaneous/docker/package-setup /tmp/
+RUN chmod +x /tmp/package-setup && /tmp/package-setup
+
+
+WORKDIR /var/www/{{ project_name }}
+
+COPY composer.json composer.lock ./
+RUN composer install --no-dev --no-interaction --prefer-dist --optimize-autoloader
+
+
+##################################################################
+#           Copy Project data
+##################################################################
+COPY . .
+
+##################################################################
+#           RUN CONFIGURATION SETUP
+##################################################################
+COPY miscellaneous/docker/config-setup /tmp/
+RUN chmod +x /tmp/config-setup && /tmp/config-setup
+
+##################################################################
+#           VERIFY VENDOR DIRECTORY & NGINX CONFIG
+##################################################################
+COPY miscellaneous/docker/verify /tmp/
+RUN chmod +x /tmp/verify && /tmp/verify
+
+
+# ##################################################################
+# #           ADD ENTRYPOINT SCRIPT
+# ##################################################################
+COPY miscellaneous/docker/entrypoint /usr/local/bin/entrypoint.sh
+
+# # Fix entrypoint script format and permissions
+RUN yum install -y dos2unix && \
+    dos2unix /usr/local/bin/entrypoint.sh && \
+    chmod +x /usr/local/bin/entrypoint.sh
+
+# ##################################################################
+# #           EXPOSE PORT & SET ENTRYPOINT
+# ##################################################################
+EXPOSE 80
+
+ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

@@ -1,0 +1,26 @@
+#!/bin/bash
+
+set -eE -o pipefail  # Exit on any command failure, including in functions and pipelines
+
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+echo "Syncing static files to s3 bucket"
+echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
+
+trap 'echo "❌ Sync failed on line $LINENO: $BASH_COMMAND" >&2; exit 1' ERR
+
+s3_buckets=()
+if [ "$BITBUCKET_BRANCH" == "{{ branch }}" ]; then
+    s3_buckets=({{ s3_bucket_sync }})
+fi
+
+for bucket in "${s3_buckets[@]}"
+do
+    echo "Sync Static:" "$(date +'%H:%M:%S')"
+    
+    aws s3 sync frontend/web/static/ "s3://$bucket/static" --quiet --delete --cache-control max-age=604800
+
+    
+done
+
+wait
+echo "✅ Sync to $bucket completed at:" "$(date +'%H:%M:%S')"

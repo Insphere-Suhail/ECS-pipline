@@ -1,0 +1,52 @@
+#!/bin/bash
+##################################################################
+#           VERIFY VENDOR & NGINX
+##################################################################
+
+echo "Checking: /var/www/{{ project_name }}/vendor directory..."
+if [ ! -d "/var/www/{{ project_name }}/vendor" ]; then
+    echo "ERROR: /var/www/{{ project_name }}/vendor directory is missing!"
+    exit 1
+fi
+
+
+# Step 2: List of writable directories to check
+DIRS=(
+    "/var/www/{{ project_name }}/console/runtime"
+    "/var/www/{{ project_name }}/frontend/runtime"
+    "/var/www/{{ project_name }}/frontend/web/assets"
+    "/var/www/{{ project_name }}/frontend/web/uploads"
+    "/var/www/{{ project_name }}/frontend/web/uploads/temp"
+    "/var/www/{{ project_name }}/api/runtime"
+    "/var/www/{{ project_name }}/api/web/assets"
+    "/var/www/{{ project_name }}/api/web/uploads"
+    "/var/www/{{ project_name }}/api/web/uploads/temp"
+)
+
+# Step 3: Loop through directories
+for DIR in "${DIRS[@]}"; do
+    echo "Checking: Validate folder and permission - $DIR ..."
+    
+    # Create if missing
+    if [ ! -d "$DIR" ]; then
+        echo "Error: $DIR is missing."
+        exit 1
+    fi
+    
+    # Check if writable
+    if [ ! -w "$DIR" ]; then
+        echo "Error:  $DIR is not writable."
+        exit 1
+    fi
+
+    echo "Valid: $DIR exists and is writable."
+done
+
+
+echo "Testing: NGINX configuration..."
+if nginx -t; then
+    echo "Valid: NGINX configuration is valid."
+else
+    echo "Error: NGINX configuration test failed."
+    exit 1
+fi

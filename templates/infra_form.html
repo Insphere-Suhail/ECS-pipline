@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ECS Infrastructure Creation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>ECS Infrastructure Creation</h1>
+        
+        <div class="checklist">
+            <h3>Prerequisites:</h3>
+            <ul>
+                <li>Access key must contain ECS, ECR permissions</li>
+                <li>Required IAM permissions for infrastructure creation</li>
+            </ul>
+        </div>
+        
+        <form method="POST">
+            <div class="form-group">
+                <label for="aws_access_key">AWS Access Key:</label>
+                <input type="text" id="aws_access_key" name="aws_access_key" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="aws_secret_key">AWS Secret Key:</label>
+                <input type="password" id="aws_secret_key" name="aws_secret_key" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="aws_region">AWS Region:</label>
+                <input type="text" id="aws_region" name="aws_region" value="ap-south-1" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="account_name">Account Name:</label>
+                <input type="text" id="account_name" name="account_name" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="project_name">Project Name:</label>
+                <input type="text" id="project_name" name="project_name" required>
+            </div>
+            
+            <div class="form-group">
+                <label>
+                    <input type="checkbox" name="create_new_vpc" value="true">
+                    Create New VPC
+                </label>
+            </div>
+            
+            <div class="form-group" id="existing_vpc_group">
+                <label for="vpc_id">Existing VPC ID:</label>
+                <input type="text" id="vpc_id" name="vpc_id">
+            </div>
+            
+            <button type="submit" class="btn">Create Infrastructure</button>
+        </form>
+    </div>
+    
+    <script>
+        document.querySelector('input[name="create_new_vpc"]').addEventListener('change', function(e) {
+            document.getElementById('existing_vpc_group').style.display = 
+                e.target.checked ? 'none' : 'block';
+        });
+    </script>
+</body>
+</html>

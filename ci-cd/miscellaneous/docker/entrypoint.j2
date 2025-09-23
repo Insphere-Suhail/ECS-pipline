@@ -1,0 +1,70 @@
+#!/bin/bash
+set -e
+
+# Define project-related paths
+PROJECT_DIR="/var/www/{{ project_name }}"
+PROJECT_BACKUP_DIR="/var/www/{{ project_name }}_old"
+MIGRATION_LOCK_FILE="/tmp/migration.lock"
+
+
+echo "Checking permissions for assets directory:"
+
+# ls -ld /var/www/{{ project_name }}/frontend/web/assets
+
+
+# If the vendor directory does not exist, attempt to restore it from backup
+if [ ! -d "$PROJECT_DIR/vendor" ]; then
+    if [ -d "$PROJECT_BACKUP_DIR/vendor" ]; then
+        echo "START: Syncing vendor from previous installation:" $(date +'%H:%M:%S')
+        rsync -azqp "$PROJECT_BACKUP_DIR/vendor/" "$PROJECT_DIR/vendor/"
+        echo "END: Syncing vendor from previous installation:" $(date +'%H:%M:%S')
+    fi
+fi
+
+if command -v composer >/dev/null 2>&1; then
+    echo  "Composer is already installed."
+else
+    echo "Composer not found. Installing globally..."
+    exit 1
+fi
+
+#aws s3 cp {{ s3_bucket }}/Config/ "$PROJECT_DIR" --recursive --exclude "common/config/main-local.php"
+
+aws s3 cp s3://{{ s3_bucket }}/Config/ "$PROJECT_DIR" --recursive
+
+
+# RDS connection details (export these in your CI/CD or Docker ENV)
+eval $(php -r '
+$config = include "/var/www/{{ project_name }}/common/config/main-local.php";
+$dsn = $config["components"]["db"]["dsn"];
+preg_match("/host=([^;]+)/", $dsn, $host);
+preg_match("/dbname=([^;]+)/", $dsn, $db);
+echo "export RDS_HOST={$host[1]}\n";
+echo "export RDS_DB={$db[1]}\n";
+echo "export RDS_USER={$config["components"]["db"]["username"]}\n";
+echo "export RDS_PASS={$config["components"]["db"]["password"]}\n";
+echo "export RDS_PORT=3306\n";
+')
+
+MAX_RETRIES=3
+COUNT=0
+
+echo "Checking MySQL RDS connection to $RDS_HOST:$RDS_PORT ..."
+
+until mysql -h"$RDS_HOST" -P"$RDS_PORT" -u"$RDS_USER" -p"$RDS_PASS" -e "USE $RDS_DB;" >/dev/null 2>&1; do
+    COUNT=$((COUNT+1))
+    echo "Waiting for RDS MySQL... ($COUNT/$MAX_RETRIES)"
+    if [ "$COUNT" -ge "$MAX_RETRIES" ]; then
+        echo "Error: Unable to connect to RDS MySQL at $RDS_HOST after $MAX_RETRIES attempts."
+        exit 1
+    fi
+    sleep 5
+done
+
+echo "Valid: Connected to RDS MySQL and database $RDS_DB exists."
+
+
+# Start PHP-FPM in daemon mode and launch NGINX in foreground
+echo "Launching PHP-FPM and Nginx..."
+php-fpm -D
+nginx -g 'daemon off;'

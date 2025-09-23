@@ -1,0 +1,50 @@
+#!/bin/bash
+##################################################################
+#           CONFIGURATION COPY & SETUP
+##################################################################
+
+CONF_DIR=/var/www/{{ project_name }}/miscellaneous/conf
+
+echo "Creating required directories..."
+
+mkdir -p \
+    frontend/web/uploads \
+    frontend/web/uploads/temp \
+    api/web/uploads \
+    api/web/uploads/temp \
+    console/runtime \
+    frontend/runtime \
+    frontend/web/assets \
+    api/runtime \
+    api/web/assets
+
+echo "Setting permissions..."
+
+chown -R nginx:nginx /var/www/{{ project_name }} && \
+chmod -R 0777 \
+    console/runtime \
+    frontend/runtime \
+    frontend/web/assets \
+    frontend/web/uploads \
+    frontend/web/uploads/temp \
+    api/runtime \
+    api/web/assets \
+    api/web/uploads \
+    api/web/uploads/temp
+
+echo "Configuring NGINX..."
+
+cp -f $CONF_DIR/nginx/nginx.conf /etc/nginx/nginx.conf
+cp -f $CONF_DIR/nginx/vhost.conf /etc/nginx/conf.d/vhost.conf
+cp -f $CONF_DIR/nginx/cors.conf /etc/nginx/default.d/cors.conf
+cp -f $CONF_DIR/nginx/headers.conf /etc/nginx/default.d/headers.conf
+cp -f $CONF_DIR/nginx/waf_rules.conf /etc/nginx/default.d/waf_rules.conf
+cp -f $CONF_DIR/nginx/handle_errors.conf /etc/nginx/default.d/handle_errors.conf
+cp -f $CONF_DIR/nginx/index.php /var/www/html/index.php
+cp -f $CONF_DIR/nginx/errors/*.html /etc/nginx/html/
+
+echo "Configuring PHP..."
+cp -f $CONF_DIR/php/php-8.2.ini /etc/php.ini
+
+echo "Configuring PHP-FPM..."
+cp -f $CONF_DIR/php-fpm/www.conf /etc/php-fpm.d/www.conf

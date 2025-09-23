@@ -1,0 +1,47 @@
+# ----------------------
+#  Bitbucket Pipelines with Amazon Linux 2 (Clean Version)
+# ----------------------
+image: amazonlinux:2
+
+options:
+  docker: true
+
+pipelines:
+  custom:
+    push-to-ECS:
+      - step:
+          name: Deploy to ECR & ECS
+          services:
+            - docker
+          caches:
+            - docker
+          script:
+            - echo ""
+            - echo "Starting Bitbucket Pipeline Build"
+            - echo ""
+            - bash miscellaneous/scripts/build-and-push-ecr
+            - echo ""
+            - echo "Starting ECS Service Update"
+            - echo ""
+            - bash miscellaneous/scripts/update-ecs-service
+
+    push-to-ecr-with-s3:
+      - step:
+          name: Deploy to ECR with S3 Sync
+          services:
+            - docker
+          caches:
+            - docker
+          script:
+            - echo ""
+            - echo "Starting Bitbucket Pipeline Build"
+            - echo ""
+            - bash miscellaneous/scripts/build-and-push-ecr
+            - echo ""
+            - echo "Starting S3 static bucket Sync"
+            - echo ""
+            - bash miscellaneous/scripts/s3_sync
+            - echo ""
+            - echo "Starting ECS Service Update"
+            - echo ""
+            - bash miscellaneous/scripts/update-ecs-service

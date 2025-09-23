@@ -1,0 +1,180 @@
+# HTTP-level settings
+limit_req_zone $binary_remote_addr zone=limit:10m rate=10r/s;
+
+# HSTS mapping for HTTPS-only
+map $scheme $strict_transport_security {
+    https "max-age=63072000; includeSubDomains; preload";
+    default "";
+}
+
+map $http_origin $cors_origin {
+    default "";
+    "~^https://(main\.d2qbvajm6qahy4\.amplifyapp\.com|siscol\.co\.in|www\.siscol\.co\.in|localhost\:3000)$" $http_origin;
+}
+
+server {
+    listen 80 default_server;
+    server_name ecs.siscol.co.in cms.siscol.co.in;
+
+    include /etc/nginx/default.d/headers.conf;
+
+    include /etc/nginx/default.d/waf_rules.conf;
+
+    include /etc/nginx/default.d/handle_errors.conf;
+
+    root /var/www/siscol/frontend/web;
+    index index.php;
+
+    location /health {
+        return 200 'OK';
+        add_header Content-Type text/plain;
+    }
+
+
+
+
+    location / {
+
+        limit_req zone=limit burst=80;
+        limit_except GET POST OPTIONS{
+            deny all;
+        }
+
+        # Handle preflight (OPTIONS)
+        if ($request_method = OPTIONS ) {
+            include /etc/nginx/default.d/cors.conf;
+
+            add_header 'Access-Control-Max-Age' 1728000;
+            add_header 'Content-Type' 'text/plain charset=UTF-8';
+            add_header 'Content-Length' 0;
+            return 204;
+        }
+
+        # CORS headers
+        include /etc/nginx/default.d/cors.conf;
+
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    # Common location blocks
+    location ~ /\.(?!well-known).* {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ~* \.(env|ini|log|conf|bak|sql|svn|git|gitignore|htaccess|htpasswd)$ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    # # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+
+    location ^~ /captcha/ {
+        add_header Cache-Control "no-store, no-cache, must-revalidate, proxy-revalidate";
+        expires off;
+    }
+
+    location ~ \.php$ {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php-fpm/www.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT $realpath_root;
+        fastcgi_param HTTP_HOST $host;
+        fastcgi_param HTTP_X_FORWARDED_FOR $proxy_add_x_forwarded_for;
+        fastcgi_param HTTP_X_FORWARDED_PROTO $scheme;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_param REMOTE_ADDR $remote_addr;
+
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+
+}
+
+
+server {
+    listen 80;
+    server_name ecsapi.siscol.co.in cmsapi.siscol.co.in;
+
+    include /etc/nginx/default.d/headers.conf;
+
+    include /etc/nginx/default.d/waf_rules.conf;
+
+    include /etc/nginx/default.d/handle_errors.conf;
+
+    root /var/www/siscol/api/web;
+    index index.php;
+
+    location /health {
+        return 200 'OK';
+        add_header Content-Type text/plain;
+    }
+
+
+    location / {
+
+        limit_req zone=limit burst=20;
+        limit_except GET POST OPTIONS{
+            deny all;
+        }
+
+        # Handle preflight (OPTIONS)
+        if ($request_method = OPTIONS ) {
+            # Include CORS configuration
+            include /etc/nginx/default.d/cors.conf;
+
+            add_header 'Access-Control-Max-Age' 1728000;
+            add_header 'Content-Type' 'text/plain charset=UTF-8';
+            add_header 'Content-Length' 0;
+            return 204;
+        }
+
+        # CORS headers
+        include /etc/nginx/default.d/cors.conf;
+
+        try_files $uri $uri/ /index.php?$query_string;
+    }
+
+    # Common location blocks
+    location ~ /\.(?!well-known).* {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ~* \.(env|ini|log|conf|bak|sql|svn|git|gitignore|htaccess|htpasswd)$ {
+        deny all;
+        access_log off;
+        log_not_found off;
+    }
+
+    location ~ \.php$ {
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        include fastcgi_params;
+        fastcgi_pass unix:/run/php-fpm/www.sock;
+        fastcgi_index index.php;
+        fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+        fastcgi_param DOCUMENT_ROOT $realpath_root;
+        fastcgi_param HTTP_HOST $host;
+        fastcgi_param HTTP_X_FORWARDED_FOR $proxy_add_x_forwarded_for;
+        fastcgi_param HTTP_X_FORWARDED_PROTO $scheme;
+        fastcgi_param HTTP_PROXY "";
+        fastcgi_param REMOTE_ADDR $remote_addr;
+    }
+
+    location ~ /\.ht {
+        deny all;
+    }
+}
+
+

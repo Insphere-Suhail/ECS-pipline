@@ -1,0 +1,115 @@
+# Block specific User-Agents
+if ($http_user_agent ~* (sqlmap|nikto|nmap|fimap|acunetix|nessus|curl|wget|libwww|crawler|bot)) {
+    return 403;
+}
+
+# Block common SQL injection attempts
+if ($query_string ~* "union.*select.*\(") { 
+    return 403; 
+}
+
+if ($query_string ~* "select.*from") { 
+    return 403; 
+}
+
+if ($query_string ~* "information_schema") { 
+    return 403; 
+}
+
+if ($query_string ~* "sleep\([0-9]+\)") { 
+    return 403; 
+}
+
+if ($query_string ~* "benchmark\((.*)\,(.*)\)") { 
+    return 403; 
+}
+
+if ($query_string ~* "load_file\(") { 
+    return 403; 
+}
+
+if ($query_string ~* "into\s+outfile") { 
+    return 403; 
+}
+
+# Block encoded SQL keywords
+if ($query_string ~* "(%27)|(')|(%3D)|(=).*(%27)|('|--|%23|#)") { 
+    return 403; 
+}
+
+# Block common XSS attacks
+if ($query_string ~* "<script") { 
+    return 403; 
+}
+
+if ($query_string ~* "%3Cscript") { 
+    return 403; 
+}
+
+if ($query_string ~* "onerror=") { 
+    return 403; 
+}
+
+if ($query_string ~* "onload=") { 
+    return 403; 
+}
+
+if ($query_string ~* "<iframe") { 
+    return 403; 
+}
+
+if ($query_string ~* "<img") { 
+    return 403; 
+}
+
+# Block command injection attempts
+if ($query_string ~* "(;|\||&).*\(") {
+     return 403; 
+}
+
+if ($query_string ~* "cmd=") { 
+    return 403; 
+}
+
+if ($query_string ~* "exec\(") { 
+    return 403; 
+}
+
+if ($query_string ~* "wget\s|curl\s|nmap") { 
+    return 403; 
+}
+
+# Block LFI/RFI attempts
+if ($query_string ~* "etc/passwd") { 
+    return 403; 
+}
+
+if ($query_string ~* "\.\./") { 
+    return 403; 
+}
+
+if ($query_string ~* "(http|https):\/\/") { 
+    return 403; 
+}
+
+if ($query_string ~* "(php:\/\/input|php:\/\/filter)") { 
+    return 403; 
+}
+
+# Block suspicious base64 strings (e.g., long encoded payloads)
+if ($query_string ~* "(?:[A-Za-z0-9+/]{100,}={0,2})") { 
+    return 403; 
+}
+
+#Long URLs
+if ($request_uri ~* ".{3000,}") {
+    return 414;  # URI Too Long
+}
+
+# Block common SQLi/XSS patterns
+if ($query_string ~* "base64_encode.*\(") {
+    return 403;
+}
+if ($query_string ~* "(<|%3C).*script.*(>|%3E)") {
+    return 403;
+}
