@@ -1,7 +1,7 @@
 # ----------------------
-#  Bitbucket Pipelines with Amazon Linux 2 (Clean Version)
+#  Bitbucket Pipelines with Amazon Linux 2023 (ARM Version)
 # ----------------------
-image: amazonlinux:2
+image: amazonlinux:2023
 
 options:
   docker: true
@@ -10,38 +10,44 @@ pipelines:
   custom:
     push-to-ECS:
       - step:
-          name: Deploy to ECR & ECS
+          name: Deploy to ECR & ECS (ARM)
+          runtime:
+            cloud:
+              arch: arm  # Use native ARM runners
           services:
             - docker
           caches:
             - docker
           script:
-            - echo ""
-            - echo "Starting Bitbucket Pipeline Build"
-            - echo ""
+            - echo "=============================================="
+            - echo "Starting Bitbucket Pipeline Build on ARM"
+            - echo "=============================================="
             - bash miscellaneous/scripts/build-and-push-ecr
-            - echo ""
+            - echo "=============================================="
             - echo "Starting ECS Service Update"
-            - echo ""
+            - echo "=============================================="
             - bash miscellaneous/scripts/update-ecs-service
 
     push-to-ecr-with-s3:
       - step:
-          name: Deploy to ECR with S3 Sync
+          name: Deploy to ECR with S3 Sync (ARM)
+          runtime:
+            cloud:
+              arch: arm  # Use native ARM runners
           services:
             - docker
           caches:
             - docker
           script:
-            - echo ""
-            - echo "Starting Bitbucket Pipeline Build"
-            - echo ""
+            - echo "=============================================="
+            - echo "Starting Bitbucket Pipeline Build on ARM"
+            - echo "=============================================="
             - bash miscellaneous/scripts/build-and-push-ecr
-            - echo ""
+            - echo "=============================================="
             - echo "Starting S3 static bucket Sync"
-            - echo ""
+            - echo "=============================================="
             - bash miscellaneous/scripts/s3_sync
-            - echo ""
+            - echo "=============================================="
             - echo "Starting ECS Service Update"
-            - echo ""
+            - echo "=============================================="
             - bash miscellaneous/scripts/update-ecs-service

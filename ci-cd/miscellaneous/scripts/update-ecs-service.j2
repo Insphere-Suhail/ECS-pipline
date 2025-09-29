@@ -1,30 +1,37 @@
+#!/bin/bash
 set -eo pipefail
 
-
-echo""
-echo""
+echo ""
+echo ""
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
 echo "▶ Triggering ECS Deploy Script               "
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
-echo""
-echo""
+echo ""
+echo ""
 
-
-echo""
-echo""
+echo ""
+echo ""
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
-echo "▶ Installing AWS CLI and Other Dependencies  "
+echo "▶ Installing AWS CLI for ARM Architecture    "
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
-echo""
-echo""
+echo ""
+echo ""
 
+# Remove conflicting curl-minimal first
+yum remove -y curl-minimal >/dev/null 2>&1 || true
 
+# Install required packages
+yum install -y unzip git >/dev/null
 
-yum install -y unzip curl git > /dev/null
+# Install curl if not already present
+if ! command -v curl &> /dev/null; then
+    yum install -y curl >/dev/null
+fi
 
 rm -rf aws awscliv2 awscliv2.zip /usr/local/aws-cli
 
-curl -s "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+# Use ARM version of AWS CLI (linux-aarch64.zip instead of linux-x86_64.zip)
+curl -s "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
 unzip -qq awscliv2.zip
 ./aws/install --bin-dir /usr/bin --install-dir /usr/local/aws-cli --update
 
@@ -32,29 +39,24 @@ export PATH="/usr/local/aws-cli/v2/current/bin:$PATH"
 
 aws --version || { echo "❌ AWS CLI not installed correctly"; exit 1; }
 
-echo""
-echo""
+echo ""
+echo ""
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
 echo "▶ Setting up Composer Auth                   "
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
-echo""
-echo""
-
-
+echo ""
+echo ""
 
 mkdir -p ~/.composer
 cp -f miscellaneous/conf/composer/auth.json ~/.composer/auth.json
 
-
-echo""
-echo""
+echo ""
+echo ""
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
 echo "▶ Setting up SSH Config                      "
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
-echo""
-echo""
-
-
+echo ""
+echo ""
 
 mkdir -p ~/.ssh
 cp -f miscellaneous/conf/ssh/config ~/.ssh/config
@@ -62,8 +64,8 @@ chmod 600 ~/.ssh/config
 
 # ENVIRONMENT VARIABLES
 AWS_REGION="${AWS_DEFAULT_REGION:-ap-south-1}"
-ECS_CLUSTER="${ECS_CLUSTER:-siscol-cluster}"
-ECS_SERVICE="${ECS_SERVICE:-siscol-task-service-gtliq1oh}"
+ECS_CLUSTER="${ECS_CLUSTER:-demo-bridge}"  # Changed from siscol-cluster to demo-bridge
+ECS_SERVICE="${ECS_SERVICE:-Bridge-service}"  # Changed from siscol-task-service-gtliq1oh to Bridge-service
 
 : "${AWS_ACCOUNT_ID:?❌ AWS_ACCOUNT_ID not set}"
 : "${ECR_REPOSITORY:?❌ ECR_REPOSITORY not set}"
@@ -72,16 +74,13 @@ ECS_SERVICE="${ECS_SERVICE:-siscol-task-service-gtliq1oh}"
 IMAGE_TAG="$BITBUCKET_BUILD_NUMBER"
 IMAGE_URI="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPOSITORY:$IMAGE_TAG"
 
-
-echo""
-echo""
+echo ""
+echo ""
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
 echo "▶ Checking ECS Service Status                "
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
-echo""
-echo""
-
-
+echo ""
+echo ""
 
 SERVICE_STATUS=$(aws ecs describe-services \
   --cluster "$ECS_CLUSTER" \
@@ -95,14 +94,13 @@ if [[ "$SERVICE_STATUS" != "ACTIVE" ]]; then
   exit 1
 fi
 
-echo""
-echo""
+echo ""
+echo ""
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
 echo "▶ Updating ECS Service with New Image        "
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
-echo""
-echo""
-
+echo ""
+echo ""
 
 echo "🚀 New Image: $IMAGE_URI"
  
@@ -112,14 +110,10 @@ aws ecs update-service \
   --force-new-deployment \
   --region "$AWS_REGION"
 
-
-echo""
-echo""
+echo ""
+echo ""
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
 echo "✅ ECS Deployment Triggered Successfully     "
 echo ";;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;"
-echo""
-echo""
-
-
-
+echo ""
+echo ""

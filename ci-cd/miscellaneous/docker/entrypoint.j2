@@ -1,36 +1,47 @@
 #!/bin/bash
 set -e
 
-# Define project-related paths
 PROJECT_DIR="/var/www/{{ project_name }}"
 PROJECT_BACKUP_DIR="/var/www/{{ project_name }}_old"
-MIGRATION_LOCK_FILE="/tmp/migration.lock"
 
+echo "Creating PHP-FPM socket directory..."
+mkdir -p /run/php-fpm
+chown -R nginx:nginx /run/php-fpm
+chmod 755 /run/php-fpm
 
-echo "Checking permissions for assets directory:"
-
-# ls -ld /var/www/{{ project_name }}/frontend/web/assets
-
-
-# If the vendor directory does not exist, attempt to restore it from backup
-if [ ! -d "$PROJECT_DIR/vendor" ]; then
-    if [ -d "$PROJECT_BACKUP_DIR/vendor" ]; then
-        echo "START: Syncing vendor from previous installation:" $(date +'%H:%M:%S')
-        rsync -azqp "$PROJECT_BACKUP_DIR/vendor/" "$PROJECT_DIR/vendor/"
-        echo "END: Syncing vendor from previous installation:" $(date +'%H:%M:%S')
-    fi
+# Restore vendor if missing
+if [ ! -d "$PROJECT_DIR/vendor" ] && [ -d "$PROJECT_BACKUP_DIR/vendor" ]; then
+    echo "Restoring vendor directory from backup..."
+    rsync -azqp "$PROJECT_BACKUP_DIR/vendor/" "$PROJECT_DIR/vendor/"
 fi
 
-if command -v composer >/dev/null 2>&1; then
-    echo  "Composer is already installed."
-else
-    echo "Composer not found. Installing globally..."
+# Ensure composer exists
+if ! command -v composer >/dev/null 2>&1; then
+    echo "❌ Composer not found."
     exit 1
 fi
 
-#aws s3 cp {{ s3_bucket }}/Config/ "$PROJECT_DIR" --recursive --exclude "common/config/main-local.php"
+# Download config from S3 (only if AWS CLI is available)
+if command -v aws >/dev/null 2>&1; then
+    echo "Downloading configuration from S3..."
+    aws s3 cp {{ s3_bucket }}/Config/ "$PROJECT_DIR" --recursive || echo "⚠️ Failed to fetch S3 config"
+else
+    echo "⚠️ AWS CLI not found, skipping S3 config download"
+fi
 
-aws s3 cp s3://{{ s3_bucket }}/Config/ "$PROJECT_DIR" --recursive
+# Start PHP-FPM
+echo "Launching PHP-FPM..."
+php-fpm --daemonize
+sleep 2
+
+# Verify PHP-FPM
+if [ -S /run/php-fpm/www.sock ]; then
+    echo "Success: PHP-FPM running"
+else
+    echo "Error: PHP-FPM failed to start"
+    php-fpm --test
+    exit 1
+fi
 
 
 # RDS connection details (export these in your CI/CD or Docker ENV)
@@ -61,10 +72,23 @@ until mysql -h"$RDS_HOST" -P"$RDS_PORT" -u"$RDS_USER" -p"$RDS_PASS" -e "USE $RDS
     sleep 5
 done
 
-echo "Valid: Connected to RDS MySQL and database $RDS_DB exists."
+echo "Success: Connected to RDS MySQL and database $RDS_DB exists."
 
 
+
+# Run migrations
+echo "Running database migrations..."
+cd "$PROJECT_DIR"
+php yii migrate --interactive=0 || {
+    echo "Error: Migration failed!"
+    exit 1
+}
+
+echo "Success: Database migrations completed."
+
+###################################################################################################################
 # Start PHP-FPM in daemon mode and launch NGINX in foreground
-echo "Launching PHP-FPM and Nginx..."
-php-fpm -D
-nginx -g 'daemon off;'
+###################################################################################################################
+
+echo "Starting Nginx..."
+exec nginx -g 'daemon off;'

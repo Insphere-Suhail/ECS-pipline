@@ -1,68 +1,663 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>ECS Infrastructure Creation</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infrastructure Creation - ECS Pipeline</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="{{ url_for('static', filename='js/infra_form.js') }}"></script>
 </head>
 <body>
-    <div class="container">
-        <h1>ECS Infrastructure Creation</h1>
-        
-        <div class="checklist">
-            <h3>Prerequisites:</h3>
-            <ul>
-                <li>Access key must contain ECS, ECR permissions</li>
-                <li>Required IAM permissions for infrastructure creation</li>
-            </ul>
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">🚀 ECS Infrastructure Creation</h4>
+                        {% if account_info %}
+                            <small class="text-light">Connected to AWS Account: {{ account_info.Account }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <form id="infraForm">
+                            <!-- Step 1: Basic Information -->
+                            <div class="step" id="step1">
+                                <h5>📝 Basic Information</h5>
+                                <div class="mb-3">
+                                    <label for="infra_name" class="form-label">Infrastructure Name</label>
+                                    <input type="text" class="form-control" id="infra_name" name="infra_name" 
+                                           placeholder="e.g., NIOS-CMS" required>
+                                    <div class="form-text">This name will be used for all AWS resources</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="region" class="form-label">AWS Region</label>
+                                    <select class="form-select" id="region" name="region" required onchange="loadVPCs()">
+                                        {% for region in regions %}
+                                            <option value="{{ region }}" {% if region == 'ap-south-1' %}selected{% endif %}>
+                                                {{ region }} {% if region == 'ap-south-1' %}(Mumbai){% endif %}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-primary" onclick="nextStep(1)">Next →</button>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: VPC Configuration -->
+                            <div class="step" id="step2" style="display: none;">
+                                <h5>🌐 VPC Configuration</h5>
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="create_new_vpc" 
+                                               name="create_new_vpc" onchange="toggleVpcOptions()">
+                                        <label class="form-check-label" for="create_new_vpc">
+                                            <strong>Create new VPC</strong>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div id="new_vpc_section" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="vpc_name" class="form-label">VPC Name</label>
+                                        <input type="text" class="form-control" id="vpc_name" name="vpc_name" 
+                                               placeholder="e.g., nios-cms-vpc">
+                                    </div>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <label for="public_subnets" class="form-label">Number of Public Subnets</label>
+                                            <input type="number" class="form-control" id="public_subnets" 
+                                                   name="public_subnets" value="2" min="2" max="6" required>
+                                            <div class="form-text">Minimum 2 required for ALB high availability</div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="private_subnets" class="form-label">Number of Private Subnets</label>
+                                            <input type="number" class="form-control" id="private_subnets" 
+                                                   name="private_subnets" value="2" min="1" max="10">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="existing_vpc_section">
+                                    <div class="mb-3">
+                                        <label for="existing_vpc" class="form-label">Choose Existing VPC</label>
+                                        <select class="form-select" id="existing_vpc" name="existing_vpc" onchange="loadSecurityGroups()">
+                                            <option value="">Loading VPCs...</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                    <button type="button" class="btn btn-secondary" onclick="prevStep(2)">← Back</button>
+                                    <button type="button" class="btn btn-primary" onclick="nextStep(2)">Next →</button>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: Security Groups -->
+                            <div class="step" id="step3" style="display: none;">
+                                <h5>🛡️ Security Groups Configuration</h5>
+                                <p class="text-muted">Select which security groups to create or use existing ones</p>
+                                
+                                <!-- ALB Security Group -->
+                                <div class="card mb-3">
+                                    <div class="card-header">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="alb_sg" name="sg_types" value="alb_sg" checked onchange="toggleSgOptions('alb')">
+                                            <label class="form-check-label" for="alb_sg">
+                                                <strong>ALB Security Group</strong> - HTTP/HTTPS from internet
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="card-body" id="alb_sg_section">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="alb_sg_option" id="alb_sg_new" value="new" checked onchange="toggleSgType('alb', 'new')">
+                                            <label class="form-check-label" for="alb_sg_new">Create new ALB Security Group</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="alb_sg_option" id="alb_sg_existing" value="existing" onchange="toggleSgType('alb', 'existing')">
+                                            <label class="form-check-label" for="alb_sg_existing">Use existing ALB Security Group</label>
+                                        </div>
+                                        <div id="alb_sg_existing_section" style="display: none; margin-top: 10px;">
+                                            <select class="form-select" id="existing_sg_alb" name="existing_sg_alb">
+                                                <option value="">Select VPC first</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Server Security Group -->
+                                <div class="card mb-3">
+                                    <div class="card-header">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="server_sg" name="sg_types" value="server_sg" checked onchange="toggleSgOptions('server')">
+                                            <label class="form-check-label" for="server_sg">
+                                                <strong>Server Security Group</strong> - SSH from VPN, HTTP/HTTPS from ALB
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="card-body" id="server_sg_section">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="server_sg_option" id="server_sg_new" value="new" checked onchange="toggleSgType('server', 'new')">
+                                            <label class="form-check-label" for="server_sg_new">Create new Server Security Group</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="server_sg_option" id="server_sg_existing" value="existing" onchange="toggleSgType('server', 'existing')">
+                                            <label class="form-check-label" for="server_sg_existing">Use existing Server Security Group</label>
+                                        </div>
+                                        <div id="server_sg_existing_section" style="display: none; margin-top: 10px;">
+                                            <select class="form-select" id="existing_sg_server" name="existing_sg_server">
+                                                <option value="">Select VPC first</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- RDS Security Group -->
+                                <div class="card mb-3">
+                                    <div class="card-header">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="rds_sg" name="sg_types" value="rds_sg" onchange="toggleSgOptions('rds')">
+                                            <label class="form-check-label" for="rds_sg">
+                                                <strong>RDS Security Group</strong> - MySQL from Server & VPN
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="card-body" id="rds_sg_section">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="rds_sg_option" id="rds_sg_new" value="new" checked onchange="toggleSgType('rds', 'new')">
+                                            <label class="form-check-label" for="rds_sg_new">Create new RDS Security Group</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="rds_sg_option" id="rds_sg_existing" value="existing" onchange="toggleSgType('rds', 'existing')">
+                                            <label class="form-check-label" for="rds_sg_existing">Use existing RDS Security Group</label>
+                                        </div>
+                                        <div id="rds_sg_existing_section" style="display: none; margin-top: 10px;">
+                                            <select class="form-select" id="existing_sg_rds" name="existing_sg_rds">
+                                                <option value="">Select VPC first</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- VPN Security Group -->
+                                <div class="card mb-3">
+                                    <div class="card-header">
+                                        <div class="form-check form-switch">
+                                            <input class="form-check-input" type="checkbox" id="vpn_sg" name="sg_types" value="vpn_sg" onchange="toggleSgOptions('vpn')">
+                                            <label class="form-check-label" for="vpn_sg">
+                                                <strong>VPN Security Group</strong> - WireGuard & Dashboard access
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="card-body" id="vpn_sg_section">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="vpn_sg_option" id="vpn_sg_new" value="new" checked onchange="toggleSgType('vpn', 'new')">
+                                            <label class="form-check-label" for="vpn_sg_new">Create new VPN Security Group</label>
+                                        </div>
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="vpn_sg_option" id="vpn_sg_existing" value="existing" onchange="toggleSgType('vpn', 'existing')">
+                                            <label class="form-check-label" for="vpn_sg_existing">Use existing VPN Security Group</label>
+                                        </div>
+                                        <div id="vpn_sg_existing_section" style="display: none; margin-top: 10px;">
+                                            <select class="form-select" id="existing_sg_vpn" name="existing_sg_vpn">
+                                                <option value="">Select VPC first</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                    <button type="button" class="btn btn-secondary" onclick="prevStep(3)">← Back</button>
+                                    <button type="button" class="btn btn-primary" onclick="nextStep(3)">Next →</button>
+                                </div>
+                            </div>
+
+                            <!-- Step 4: EC2 & Key Pair Configuration -->
+                            <div class="step" id="step4" style="display: none;">
+                                <h5>⚙️ EC2 Configuration & Key Pair</h5>
+                                
+                                <!-- EC2 Instance Type -->
+                                <div class="mb-3">
+                                    <label for="instance_type" class="form-label">EC2 Instance Type</label>
+                                    <select class="form-select" id="instance_type" name="instance_type" required>
+                                        <option value="">Select instance type...</option>
+                                        <option value="t4g.micro" selected>t4g.micro - 2 vCPU, 1GB RAM</option>
+                                        <option value="t4g.small">t4g.small - 2 vCPU, 2GB RAM</option>
+                                        <option value="t4g.medium">t4g.medium - 2 vCPU, 4GB RAM</option>
+                                        <option value="t4g.large">t4g.large - 2 vCPU, 8GB RAM</option>
+                                        <option value="m6g.medium">m6g.medium - 1 vCPU, 4GB RAM</option>
+                                        <option value="m6g.large">m6g.large - 2 vCPU, 8GB RAM</option>
+                                        <option value="c6g.medium">c6g.medium - 1 vCPU, 2GB RAM</option>
+                                        <option value="c6g.large">c6g.large - 2 vCPU, 4GB RAM</option>
+                                        <option value="r6g.medium">r6g.medium - 1 vCPU, 8GB RAM</option>
+                                        <option value="r6g.large">r6g.large - 2 vCPU, 16GB RAM</option>
+                                    </select>
+                                    <div class="form-text">All instance types support ARM64 architecture</div>
+                                </div>
+                                
+                                <!-- Key Pair Options -->
+                                <div class="mb-3">
+                                    <label class="form-label">SSH Key Pair</label>
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <div class="form-check mb-3">
+                                                <input class="form-check-input" type="radio" name="key_pair_option" id="key_pair_existing" value="existing" checked onchange="toggleKeyPairOptions()">
+                                                <label class="form-check-label" for="key_pair_existing">
+                                                    Use existing key pair
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="key_pair_option" id="key_pair_new" value="new" onchange="toggleKeyPairOptions()">
+                                                <label class="form-check-label" for="key_pair_new">
+                                                    Create new key pair
+                                                </label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Existing Key Pair Selection -->
+                                <div id="existing_key_section">
+                                    <div class="mb-3">
+                                        <label for="existing_key_pair" class="form-label">Select Existing Key Pair</label>
+                                        <select class="form-select" id="existing_key_pair" name="existing_key_pair">
+                                            <option value="">Loading key pairs...</option>
+                                        </select>
+                                        <div class="form-text">Select an existing key pair for SSH access</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- New Key Pair Creation -->
+                                <div id="new_key_section" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="new_key_name" class="form-label">New Key Pair Name</label>
+                                        <input type="text" class="form-control" id="new_key_name" name="new_key_name" 
+                                               placeholder="e.g., my-new-key-pair">
+                                        <div class="form-text">A new .pem file will be downloaded automatically</div>
+                                    </div>
+                                    <div class="alert alert-info">
+                                        <small>
+                                            <strong>Note:</strong> The private key file will be downloaded automatically. 
+                                            Keep it secure as it cannot be retrieved again.
+                                        </small>
+                                    </div>
+                                </div>
+                                
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                    <button type="button" class="btn btn-secondary" onclick="prevStep(4)">← Back</button>
+                                    <button type="button" class="btn btn-primary" onclick="nextStep(4)">Next →</button>
+                                </div>
+                            </div>
+
+                            <!-- Step 5: Final Review -->
+                            <div class="step" id="step5" style="display: none;">
+                                <h5>🔍 Final Review</h5>
+                                
+                                <div class="alert alert-info">
+                                    <h6><strong>📋 Resources to be Created:</strong></h6>
+                                    <ul class="mb-0">
+                                        <li>IAM Roles (Task Execution, Instance)</li>
+                                        <li>VPC with Subnets & Route Tables</li>
+                                        <li>Security Groups (as selected)</li>
+                                        <li>Application Load Balancer</li>
+                                        <li>ECR Repository with Docker Image</li>
+                                        <li>ECS Task Definition</li>
+                                        <li>ECS Cluster with <strong><span id="review_instance_type">t4g.micro</span></strong> instances</li>
+                                        <li>ECS Service with Load Balancing</li>
+                                    </ul>
+                                </div>
+
+                                <div class="alert alert-warning">
+                                    <h6><strong>⚠️ Important Notes:</strong></h6>
+                                    <ul class="mb-0">
+                                        <li>This will create real AWS resources that may incur costs</li>
+                                        <li>Infrastructure creation may take 10-15 minutes</li>
+                                        <li>Ensure you have sufficient AWS permissions</li>
+                                        <li>Docker must be installed and running on this machine</li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                    <button type="button" class="btn btn-secondary" onclick="prevStep(5)">← Back</button>
+                                    <button type="button" class="btn btn-success btn-lg" onclick="createInfrastructure()">
+                                        🚀 Create Infrastructure
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
+    </div>
+
+    <script>
+        // Load VPCs and Key Pairs when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadVPCs();
+            loadKeyPairs();
+            
+            // Update instance type in review
+            document.getElementById('instance_type').addEventListener('change', function() {
+                document.getElementById('review_instance_type').textContent = this.value;
+            });
+        });
         
-        <form method="POST">
-            <div class="form-group">
-                <label for="aws_access_key">AWS Access Key:</label>
-                <input type="text" id="aws_access_key" name="aws_access_key" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="aws_secret_key">AWS Secret Key:</label>
-                <input type="password" id="aws_secret_key" name="aws_secret_key" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="aws_region">AWS Region:</label>
-                <input type="text" id="aws_region" name="aws_region" value="ap-south-1" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="account_name">Account Name:</label>
-                <input type="text" id="account_name" name="account_name" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="project_name">Project Name:</label>
-                <input type="text" id="project_name" name="project_name" required>
-            </div>
-            
-            <div class="form-group">
-                <label>
-                    <input type="checkbox" name="create_new_vpc" value="true">
-                    Create New VPC
+        function toggleKeyPairOptions() {
+            const useExisting = document.getElementById('key_pair_existing').checked;
+            document.getElementById('existing_key_section').style.display = useExisting ? 'block' : 'none';
+            document.getElementById('new_key_section').style.display = useExisting ? 'none' : 'block';
+        }
+        
+        function loadKeyPairs() {
+            const region = document.getElementById('region').value;
+            fetch(`/api/key-pairs?region=${region}`)
+                .then(response => response.json())
+                .then(data => {
+                    const select = document.getElementById('existing_key_pair');
+                    select.innerHTML = '<option value="">Select key pair...</option>';
+                    
+                    if (data.key_pairs && data.key_pairs.length > 0) {
+                        data.key_pairs.forEach(key => {
+                            const option = document.createElement('option');
+                            option.value = key.KeyName;
+                            option.textContent = key.KeyName;
+                            select.appendChild(option);
+                        });
+                    } else {
+                        const option = document.createElement('option');
+                        option.value = '';
+                        option.textContent = 'No key pairs found';
+                        select.appendChild(option);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading key pairs:', error);
+                });
+        }
+    </script>
+</body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infrastructure Creation - ECS Pipeline</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="{{ url_for('static', filename='js/infra_form.js') }}"></script>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">🚀 ECS Infrastructure Creation</h4>
+                        {% if account_info %}
+                            <small class="text-light">Connected to AWS Account: {{ account_info.Account }}</small>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <form id="infraForm">
+                             Step 1: Basic Information -->
+                            <div class="step" id="step1">
+                                <h5>📝 Basic Information</h5>
+                                <div class="mb-3">
+                                    <label for="infra_name" class="form-label">Infrastructure Name</label>
+                                    <input type="text" class="form-control" id="infra_name" name="infra_name" 
+                                           placeholder="e.g., NIOS-CMS" required>
+                                    <div class="form-text">This name will be used for all AWS resources</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="region" class="form-label">AWS Region</label>
+                                    <select class="form-select" id="region" name="region" required onchange="loadVPCs()">
+                                        {% for region in regions %}
+                                            <option value="{{ region }}" {% if region == 'ap-south-1' %}selected{% endif %}>
+                                                {{ region }} {% if region == 'ap-south-1' %}(Mumbai){% endif %}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                                <div class="d-grid">
+                                    <button type="button" class="btn btn-primary" onclick="nextStep(1)">Next →</button>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: VPC Configuration -->
+                            <div class="step" id="step2" style="display: none;">
+                                <h5>🌐 VPC Configuration</h5>
+                                <div class="mb-3">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" id="create_new_vpc" 
+                                               name="create_new_vpc" onchange="toggleVpcOptions()">
+                                        <label class="form-check-label" for="create_new_vpc">
+                                            <strong>Create new VPC</strong>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div id="new_vpc_section" style="display: none;">
+                                    <div class="mb-3">
+                                        <label for="vpc_name" class="form-label">VPC Name</label>
+                                        <input type="text" class="form-control" id="vpc_name" name="vpc_name" 
+                                               placeholder="e.g., nios-cms-vpc">
+                                    </div>
+                                    <div class="row">
+                                        <!-- <div class="col-md-6">
+                                            <label for="public_subnets" class="form-label">Number of Public Subnets</label>
+                                            <input type="number" class="form-control" id="public_subnets" 
+                                                   name="public_subnets" value="2" min="1" max="10">
+                                        </div> -->
+                                        <div class="col-md-6">
+                                            <label for="public_subnets" class="form-label">Number of Public Subnets</label>
+                                            <input type="number" class="form-control" id="public_subnets" 
+                                                   name="public_subnets" value="2" min="2" max="6" required>
+                                            <div class="form-text">Minimum 2 required for ALB high availability</div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <label for="private_subnets" class="form-label">Number of Private Subnets</label>
+                                            <input type="number" class="form-control" id="private_subnets" 
+                                                   name="private_subnets" value="2" min="1" max="10">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div id="existing_vpc_section">
+                                    <div class="mb-3">
+                                        <label for="existing_vpc" class="form-label">Choose Existing VPC</label>
+                                        <select class="form-select" id="existing_vpc" name="existing_vpc" onchange="loadSecurityGroups()">
+                                            <option value="">Loading VPCs...</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                                    <button type="button" class="btn btn-secondary" onclick="prevStep(2)">← Back</button>
+                                    <button type="button" class="btn btn-primary" onclick="nextStep(2)">Next →</button>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: Security Groups with existing options -->
+                            <!-- Step 3: Security Groups with existing options -->
+<div class="step" id="step3" style="display: none;">
+    <h5>🛡️ Security Groups Configuration</h5>
+    <p class="text-muted">Select which security groups to create or use existing ones</p>
+    
+    <!-- ALB Security Group -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="alb_sg" name="sg_types" value="alb_sg" checked onchange="toggleSgOptions('alb')">
+                <label class="form-check-label" for="alb_sg">
+                    <strong>ALB Security Group</strong> - HTTP/HTTPS from internet
                 </label>
             </div>
-            
-            <div class="form-group" id="existing_vpc_group">
-                <label for="vpc_id">Existing VPC ID:</label>
-                <input type="text" id="vpc_id" name="vpc_id">
+        </div>
+        <div class="card-body" id="alb_sg_section">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="alb_sg_option" id="alb_sg_new" value="new" checked onchange="toggleSgType('alb', 'new')">
+                <label class="form-check-label" for="alb_sg_new">Create new ALB Security Group</label>
             </div>
-            
-            <button type="submit" class="btn">Create Infrastructure</button>
-        </form>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="alb_sg_option" id="alb_sg_existing" value="existing" onchange="toggleSgType('alb', 'existing')">
+                <label class="form-check-label" for="alb_sg_existing">Use existing ALB Security Group</label>
+            </div>
+            <div id="alb_sg_existing_section" style="display: none; margin-top: 10px;">
+                <select class="form-select" id="existing_sg_alb" name="existing_sg_alb">
+                    <option value="">Select VPC first</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Server Security Group -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="server_sg" name="sg_types" value="server_sg" checked onchange="toggleSgOptions('server')">
+                <label class="form-check-label" for="server_sg">
+                    <strong>Server Security Group</strong> - SSH from VPN, HTTP/HTTPS from ALB
+                </label>
+            </div>
+        </div>
+        <div class="card-body" id="server_sg_section">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="server_sg_option" id="server_sg_new" value="new" checked onchange="toggleSgType('server', 'new')">
+                <label class="form-check-label" for="server_sg_new">Create new Server Security Group</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="server_sg_option" id="server_sg_existing" value="existing" onchange="toggleSgType('server', 'existing')">
+                <label class="form-check-label" for="server_sg_existing">Use existing Server Security Group</label>
+            </div>
+            <div id="server_sg_existing_section" style="display: none; margin-top: 10px;">
+                <select class="form-select" id="existing_sg_server" name="existing_sg_server">
+                    <option value="">Select VPC first</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- RDS Security Group -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="rds_sg" name="sg_types" value="rds_sg" onchange="toggleSgOptions('rds')">
+                <label class="form-check-label" for="rds_sg">
+                    <strong>RDS Security Group</strong> - MySQL from Server & VPN
+                </label>
+            </div>
+        </div>
+        <div class="card-body" id="rds_sg_section">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="rds_sg_option" id="rds_sg_new" value="new" checked onchange="toggleSgType('rds', 'new')">
+                <label class="form-check-label" for="rds_sg_new">Create new RDS Security Group</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="rds_sg_option" id="rds_sg_existing" value="existing" onchange="toggleSgType('rds', 'existing')">
+                <label class="form-check-label" for="rds_sg_existing">Use existing RDS Security Group</label>
+            </div>
+            <div id="rds_sg_existing_section" style="display: none; margin-top: 10px;">
+                <select class="form-select" id="existing_sg_rds" name="existing_sg_rds">
+                    <option value="">Select VPC first</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- VPN Security Group -->
+    <div class="card mb-3">
+        <div class="card-header">
+            <div class="form-check form-switch">
+                <input class="form-check-input" type="checkbox" id="vpn_sg" name="sg_types" value="vpn_sg" onchange="toggleSgOptions('vpn')">
+                <label class="form-check-label" for="vpn_sg">
+                    <strong>VPN Security Group</strong> - WireGuard & Dashboard access
+                </label>
+            </div>
+        </div>
+        <div class="card-body" id="vpn_sg_section">
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="vpn_sg_option" id="vpn_sg_new" value="new" checked onchange="toggleSgType('vpn', 'new')">
+                <label class="form-check-label" for="vpn_sg_new">Create new VPN Security Group</label>
+            </div>
+            <div class="form-check">
+                <input class="form-check-input" type="radio" name="vpn_sg_option" id="vpn_sg_existing" value="existing" onchange="toggleSgType('vpn', 'existing')">
+                <label class="form-check-label" for="vpn_sg_existing">Use existing VPN Security Group</label>
+            </div>
+            <div id="vpn_sg_existing_section" style="display: none; margin-top: 10px;">
+                <select class="form-select" id="existing_sg_vpn" name="existing_sg_vpn">
+                    <option value="">Select VPC first</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+        <button type="button" class="btn btn-secondary" onclick="prevStep(3)">← Back</button>
+        <button type="button" class="btn btn-primary" onclick="nextStep(3)">Next →</button>
+    </div>
+</div>
+
+                           
+                           <!-- Step 4: Final Configuration -->
+<div class="step" id="step4" style="display: none;">
+    <h5>🔑 Key Pair Selection & Final Review</h5>
+    
+    <div class="mb-3">
+        <label for="key_pair" class="form-label">EC2 Key Pair (Optional)</label>
+        <select class="form-select" id="key_pair" name="key_pair">
+            <option value="">Loading key pairs...</option>
+        </select>
+        <div class="form-text">Select an existing key pair for SSH access to EC2 instances</div>
     </div>
     
+    <div class="alert alert-info">
+        <h6><strong>📋 Resources to be Created:</strong></h6>
+        <ul class="mb-0">
+            <li>IAM Roles (Task Execution, Instance)</li>
+            <li>VPC with Subnets & Route Tables</li>
+            <li>Security Groups (as selected)</li>
+            <li>Application Load Balancer</li>
+            <li>ECR Repository with Docker Image</li>
+            <li>ECS Task Definition</li>
+            <li>ECS Cluster</li>
+            <li>ECS Service with Load Balancing</li>
+        </ul>
+    </div>
+
+    <div class="alert alert-warning">
+        <h6><strong>⚠️ Important Notes:</strong></h6>
+        <ul class="mb-0">
+            <li>This will create real AWS resources that may incur costs</li>
+            <li>Infrastructure creation may take 10-15 minutes</li>
+            <li>Ensure you have sufficient AWS permissions</li>
+            <li>Docker must be installed and running on this machine</li>
+        </ul>
+    </div>
+    
+    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+        <button type="button" class="btn btn-secondary" onclick="prevStep(4)">← Back</button>
+        <button type="button" class="btn btn-success btn-lg" onclick="createInfrastructure()">
+            🚀 Create Infrastructure
+        </button>
+    </div>
+</div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        document.querySelector('input[name="create_new_vpc"]').addEventListener('change', function(e) {
-            document.getElementById('existing_vpc_group').style.display = 
-                e.target.checked ? 'none' : 'block';
+        // Load VPCs when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            loadVPCs();
         });
     </script>
 </body>
 </html>
+ 

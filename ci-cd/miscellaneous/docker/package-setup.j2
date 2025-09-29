@@ -1,29 +1,33 @@
-# #!/bin/bash
-# ##################################################################
-# #           BUILDER ENVIRONMENT SETUP
-# ##################################################################
+#!/bin/bash
+##################################################################
+#           BUILDER ENVIRONMENT SETUP
+##################################################################
 set -e
 
-echo "Enabling PHP 8.2..."
-amazon-linux-extras enable php8.2  nginx1 && yum clean metadata
-
 echo "Updating system and installing runtime dependencies..."
-yum -y update && yum install -y \
+dnf -y update && dnf install -y \
     php php-cli php-fpm php-mysqlnd php-pdo php-json php-mbstring php-xml php-opcache php-gd php-zip \
-    nginx unzip bash coreutils which && \
-    yum clean all
+    nginx unzip which wget curl --allowerasing && \
+    dnf clean all
 
 echo "Installing Composer..."
 curl -sS https://getcomposer.org/installer | php
 mv composer.phar /usr/local/bin/composer
 chmod +x /usr/local/bin/composer
 
-
-echo "Installing AWS CLI v2..."
+echo "Installing AWS CLI v2 for ARM..."
 cd /tmp
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip"
 unzip -q awscliv2.zip
 ./aws/install
 rm -rf aws awscliv2.zip
+
+echo "Installing MySQL client..."
+cd /tmp
+wget https://dev.mysql.com/get/mysql80-community-release-el9-1.noarch.rpm
+dnf install -y mysql80-community-release-el9-1.noarch.rpm
+rpm --import https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
+dnf install -y mysql-community-client
+dnf clean all
 
 echo "Builder environment setup completed."

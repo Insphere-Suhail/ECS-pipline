@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infrastructure Creation Status</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .status-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+        }
+        .status-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .progress-container {
+            margin: 2rem 0;
+        }
+        .status-message {
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+        }
+        .status-in-progress {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+        .status-completed {
+            background-color: #e8f5e8;
+            border-left: 4px solid #4caf50;
+        }
+        .status-failed {
+            background-color: #ffebee;
+            border-left: 4px solid #f44336;
+        }
+        .details-list {
+            margin-top: 1rem;
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .back-button {
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container status-container">
+        <div class="status-header">
+            <h1><i class="fas fa-cloud-upload-alt"></i> Infrastructure Creation Status</h1>
+            <p class="text-muted">Tracking the progress of your infrastructure deployment</p>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-tasks"></i> Operation ID: <code>{{ operation_id }}</code>
+                </h5>
+            </div>
+            <div class="card-body">
+                <!-- Progress Bar -->
+                <div class="progress-container">
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Progress</span>
+                        <span id="progress-text">Checking status...</span>
+                    </div>
+                    <div class="progress" style="height: 20px;">
+                        <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                             role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <!-- Status Message -->
+                <div id="status-message" class="status-message status-in-progress">
+                    <div class="d-flex align-items-center">
+                        <i class="fas fa-sync-alt spinner me-2"></i>
+                        <span id="message-text">Initializing infrastructure creation...</span>
+                    </div>
+                </div>
+
+                <!-- Details Section -->
+                <div id="details-section" style="display: none;">
+                    <h6><i class="fas fa-info-circle"></i> Created Resources:</h6>
+                    <div id="details-list" class="details-list">
+                        <!-- Details will be populated by JavaScript -->
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                    <a href="/infra_form" class="btn btn-secondary back-button">
+                        <i class="fas fa-arrow-left"></i> Back to Infrastructure Form
+                    </a>
+                    <button id="refresh-btn" class="btn btn-primary back-button" onclick="checkStatus()">
+                        <i class="fas fa-sync-alt"></i> Refresh Status
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Auto-refresh notice -->
+        <div class="alert alert-info mt-3">
+            <small>
+                <i class="fas fa-info-circle"></i> 
+                This page will automatically refresh every 10 seconds. 
+                Infrastructure creation typically takes 10-15 minutes.
+            </small>
+        </div>
+    </div>
+
+    <script>
+        const operationId = '{{ operation_id }}';
+        let checkInterval;
+
+        function updateUI(operation) {
+            const status = operation.status || 'unknown';
+            const message = operation.message || 'No status information available';
+            const details = operation.details || [];
+
+            // Update progress bar and text
+            const progressBar = document.getElementById('progress-bar');
+            const progressText = document.getElementById('progress-text');
+            const statusMessage = document.getElementById('status-message');
+            const messageText = document.getElementById('message-text');
+            const detailsSection = document.getElementById('details-section');
+            const detailsList = document.getElementById('details-list');
+
+            // Remove all existing classes
+            statusMessage.className = 'status-message';
+            
+            switch(status) {
+                case 'in_progress':
+                    progressBar.style.width = '50%';
+                    progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-warning';
+                    progressText.textContent = 'In Progress (50%)';
+                    statusMessage.classList.add('status-in-progress');
+                    messageText.innerHTML = `<i class="fas fa-sync-alt spinner"></i> ${message}`;
+                    break;
+                    
+                case 'completed':
+                    progressBar.style.width = '100%';
+                    progressBar.className = 'progress-bar bg-success';
+                    progressText.textContent = 'Completed (100%)';
+                    statusMessage.classList.add('status-completed');
+                    messageText.innerHTML = `<i class="fas fa-check-circle"></i> ${message}`;
+                    
+                    // Show details
+                    if (details.length > 0) {
+                        detailsSection.style.display = 'block';
+                        detailsList.innerHTML = details.map(detail => `
+                            <div class="alert alert-success">
+                                <strong>${detail.service}:</strong> 
+                                ${detail.id || detail.uri || detail.name || detail.url || detail.info}
+                            </div>
+                        `).join('');
+                    }
+                    
+                    // Stop auto-refresh
+                    clearInterval(checkInterval);
+                    break;
+                    
+                case 'failed':
+                    progressBar.style.width = '100%';
+                    progressBar.className = 'progress-bar bg-danger';
+                    progressText.textContent = 'Failed (100%)';
+                    statusMessage.classList.add('status-failed');
+                    messageText.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${message}`;
+                    
+                    // Stop auto-refresh
+                    clearInterval(checkInterval);
+                    break;
+                    
+                default:
+                    progressBar.style.width = '25%';
+                    progressBar.className = 'progress-bar progress-bar-striped progress-bar-animated bg-info';
+                    progressText.textContent = 'Starting (25%)';
+                    statusMessage.classList.add('status-in-progress');
+                    messageText.innerHTML = `<i class="fas fa-sync-alt spinner"></i> ${message}`;
+            }
+        }
+
+        function checkStatus() {
+            fetch(`/get_operation_status/${operationId}`)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(operation => {
+                    updateUI(operation);
+                    
+                    // If completed or failed, stop auto-refresh
+                    if (operation.status === 'completed' || operation.status === 'failed') {
+                        clearInterval(checkInterval);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking status:', error);
+                    document.getElementById('message-text').innerHTML = 
+                        `<i class="fas fa-exclamation-triangle"></i> Error checking status: ${error.message}`;
+                });
+        }
+
+        // Start checking status immediately
+        checkStatus();
+        
+        // Set up auto-refresh every 10 seconds
+        checkInterval = setInterval(checkStatus, 10000);
+
+        // Also check when page becomes visible
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                checkStatus();
+            }
+        });
+    </script>
+</body>
+</html>

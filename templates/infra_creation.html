@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ECS Infrastructure Creation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>🛠️ ECS Infrastructure Creation</h1>
+        
+        {% if error %}
+        <div class="error-message">
+            ❌ Error: {{ error }}
+        </div>
+        {% endif %}
+        
+        <form method="POST" id="infraForm">
+            
+            <div class="form-group">
+                <label for="app_name">Infrastructure Name:</label>
+                <input type="text" id="app_name" name="app_name" required 
+                       placeholder="e.g., NIOS-CMS">
+            </div>
+            
+            
+            <div class="form-group">
+                <label for="region">AWS Region:</label>
+                <select id="region" name="region" required>
+                    <option value="ap-south-1">ap-south-1 (Mumbai)</option>
+                    <option value="us-east-1">us-east-1 (N. Virginia)</option>
+                    <option value="us-west-2">us-west-2 (Oregon)</option>
+                    <option value="eu-west-1">eu-west-1 (Ireland)</option>
+                </select>
+            </div>
+            
+            
+            <div class="form-section">
+                <h3>🌐 VPC Configuration</h3>
+                
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" name="create_new_vpc" value="true" checked 
+                               onchange="toggleVpcOptions()">
+                        Create New VPC
+                    </label>
+                </div>
+                
+                <div id="existingVpcSection" style="display: none;">
+                    <div class="form-group">
+                        <label for="existing_vpc_id">Choose Existing VPC:</label>
+                        <select id="existing_vpc_id" name="existing_vpc_id">
+                            <option value="">-- Select VPC --</option>
+                            {% for vpc in resources.vpcs %}
+                            <option value="{{ vpc.id }}">{{ vpc.name }} ({{ vpc.id }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="newVpcSection">
+                    <div class="form-group">
+                        <label for="public_subnets">Number of Public Subnets:</label>
+                        <input type="number" id="public_subnets" name="public_subnets" value="2" min="1" max="6">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="private_subnets">Number of Private Subnets:</label>
+                        <input type="number" id="private_subnets" name="private_subnets" value="2" min="1" max="6">
+                    </div>
+                </div>
+            </div>
+            
+            
+            <div class="form-section">
+                <h3>🛡️ Security Groups</h3>
+                <p>Select which security groups to create:</p>
+                
+                <div class="checkbox-group">
+                    <label><input type="checkbox" name="server_sg" value="true" checked> Server SG</label>
+                    <label><input type="checkbox" name="alb_sg" value="true" checked> ALB SG</label>
+                    <label><input type="checkbox" name="rds_sg" value="true"> RDS SG</label>
+                    <label><input type="checkbox" name="vpn_sg" value="true"> VPN SG</label>
+                </div>
+            </div>
+            
+           
+            <div class="form-section">
+                <h3>🔑 SSH Key Pair</h3>
+                <div class="form-group">
+                    <label for="key_pair">Choose Key Pair:</label>
+                    <select id="key_pair" name="key_pair">
+                        <option value="">-- Select Key Pair --</option>
+                        {% for key in resources.key_pairs %}
+                        <option value="{{ key }}">{{ key }}</option>
+                        {% endfor %}
+                    </select>
+                    <small>Or leave blank to use existing</small>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-primary">Create Infrastructure</button>
+        </form>
+    </div>
+    
+    <script>
+        function toggleVpcOptions() {
+            const createNew = document.querySelector('input[name="create_new_vpc"]').checked;
+            document.getElementById('existingVpcSection').style.display = createNew ? 'none' : 'block';
+            document.getElementById('newVpcSection').style.display = createNew ? 'block' : 'none';
+        }
+        
+        // Initialize on page load
+        toggleVpcOptions();
+    </script>
+</body>
+</html>
