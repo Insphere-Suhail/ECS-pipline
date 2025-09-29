@@ -591,6 +591,30 @@ def infra_success(operation_id):
 def old_infra_form():
     return redirect(url_for('infra_credentials'))
 
+# if __name__ == '__main__':
+#     os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+#     app.run(debug=True)
+
+
+
+
+def get_host_ip():
+    """Get the host IP for Docker environment"""
+    try:
+        # This will get the container's IP in Docker
+        host_name = socket.gethostname()
+        host_ip = socket.gethostbyname(host_name)
+        return host_ip
+    except:
+        return '0.0.0.0'
+
 if __name__ == '__main__':
-    os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-    app.run(debug=True)
+    # Use environment variables or defaults for Docker
+    host = os.getenv('HOST', '0.0.0.0')
+    port = int(os.getenv('PORT', 80))
+    debug = os.getenv('DEBUG', 'False').lower() == 'true'
+    
+    print(f"🚀 Starting ECS Infrastructure Creator on {host}:{port}")
+    print(f"📊 Debug mode: {debug}")
+    
+    app.run(host=host, port=port, debug=debug)

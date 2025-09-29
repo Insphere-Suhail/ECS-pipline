@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  ecs-infra-creator:
+    image: suhail1/insphere-ecs-automation:latest
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "80:80"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./generated_projects:/app/generated_projects
+    environment:
+      - FLASK_ENV=production
+      - HOST=0.0.0.0
+      - PORT=80
+    restart: unless-stopped
