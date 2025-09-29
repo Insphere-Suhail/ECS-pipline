@@ -63,7 +63,7 @@ class SecurityGroupService:
             )
             sg_id = response['GroupId']
             
-            # Add inbound rules for ALB - ONLY from 0.0.0.0/0
+            # Add inbound rules for ALB - ONLY HTTP and HTTPS from 0.0.0.0/0
             self.ec2.authorize_security_group_ingress(
                 GroupId=sg_id,
                 IpPermissions=[
@@ -81,6 +81,10 @@ class SecurityGroupService:
                     }
                 ]
             )
+            
+            print(f"✅ ALB Security Group created: {sg_id}")
+            print(f"   - Inbound: HTTP (80) from 0.0.0.0/0")
+            print(f"   - Inbound: HTTPS (443) from 0.0.0.0/0")
             
             return sg_id
             
@@ -107,19 +111,10 @@ class SecurityGroupService:
             )
             sg_id = response['GroupId']
             
-            # Build IP permissions without duplicates
+            # Build IP permissions - HTTP/HTTPS from ALB SG + SSH from VPN SG
             ip_permissions = []
             
-            # SSH access from VPN SG only
-            if vpn_sg_id:
-                ip_permissions.append({
-                    'IpProtocol': 'tcp',
-                    'FromPort': 22,
-                    'ToPort': 22,
-                    'UserIdGroupPairs': [{'GroupId': vpn_sg_id}]
-                })
-            
-            # HTTP/HTTPS access from ALB SG only
+            # HTTP/HTTPS access from ALB SG
             if alb_sg_id:
                 ip_permissions.extend([
                     {
@@ -136,11 +131,27 @@ class SecurityGroupService:
                     }
                 ])
             
+            # SSH access from VPN SG
+            if vpn_sg_id:
+                ip_permissions.append({
+                    'IpProtocol': 'tcp',
+                    'FromPort': 22,
+                    'ToPort': 22,
+                    'UserIdGroupPairs': [{'GroupId': vpn_sg_id}]
+                })
+            
             if ip_permissions:
                 self.ec2.authorize_security_group_ingress(
                     GroupId=sg_id,
                     IpPermissions=ip_permissions
                 )
+            
+            print(f"✅ Server Security Group created: {sg_id}")
+            if alb_sg_id:
+                print(f"   - Inbound: HTTP (80) from ALB SG: {alb_sg_id}")
+                print(f"   - Inbound: HTTPS (443) from ALB SG: {alb_sg_id}")
+            if vpn_sg_id:
+                print(f"   - Inbound: SSH (22) from VPN SG: {vpn_sg_id}")
             
             return sg_id
             
@@ -167,7 +178,7 @@ class SecurityGroupService:
             )
             sg_id = response['GroupId']
             
-            # Build IP permissions for RDS
+            # Build IP permissions for RDS - MySQL from Server SG and VPN SG
             ip_permissions = []
             
             # MySQL access from Server SG
@@ -193,6 +204,12 @@ class SecurityGroupService:
                     GroupId=sg_id,
                     IpPermissions=ip_permissions
                 )
+            
+            print(f"✅ RDS Security Group created: {sg_id}")
+            if server_sg_id:
+                print(f"   - Inbound: MySQL (3306) from Server SG: {server_sg_id}")
+            if vpn_sg_id:
+                print(f"   - Inbound: MySQL (3306) from VPN SG: {vpn_sg_id}")
             
             return sg_id
             
@@ -237,6 +254,10 @@ class SecurityGroupService:
                     }
                 ]
             )
+            
+            print(f"✅ VPN Security Group created: {sg_id}")
+            print(f"   - Inbound: TCP (10086) from 0.0.0.0/0")
+            print(f"   - Inbound: UDP (51820) from 0.0.0.0/0")
             
             return sg_id
             

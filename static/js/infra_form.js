@@ -397,16 +397,21 @@ function createInfrastructure() {
         private_subnets: parseInt(formData.get('private_subnets') || '2'),
         existing_vpc: formData.get('existing_vpc') || '',
         
-        // Security groups
+        // Security groups - this should include ALL checked security groups
         sg_types: formData.getAll('sg_types'),
+        
+        // Security group options
         alb_sg_option: formData.get('alb_sg_option') || 'new',
         server_sg_option: formData.get('server_sg_option') || 'new',
         rds_sg_option: formData.get('rds_sg_option') || 'new',
         vpn_sg_option: formData.get('vpn_sg_option') || 'new',
+        
+        // Existing security group IDs
         existing_sg_alb: formData.get('existing_sg_alb') || '',
         existing_sg_server: formData.get('existing_sg_server') || '',
         existing_sg_rds: formData.get('existing_sg_rds') || '',
         existing_sg_vpn: formData.get('existing_sg_vpn') || '',
+
         
         // EC2 Configuration
         instance_type: formData.get('instance_type'),

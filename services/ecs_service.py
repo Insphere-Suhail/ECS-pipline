@@ -43,9 +43,45 @@ class ECSService:
                         "essential": True,
                         "portMappings": [
                             {
+                                "name": f"{infra_name}-80-http",  # Added port name
                                 "containerPort": 80,
                                 "hostPort": 80,
-                                "protocol": "tcp"
+                                "protocol": "tcp",
+                                "appProtocol": "http"  # Added app protocol
+                            }
+                        ],
+                        "environment": [  # Added environment variables
+                            {
+                                "name": "BITBUCKET_BRANCH",
+                                "value": "master"
+                            },
+                            {
+                                "name": "REDIS_HOST",
+                                "value": "redis-endpoint"  # Placeholder - you can update this later
+                            },
+                            {
+                                "name": "DB_NAME",
+                                "value": "dbname"  # Placeholder - you can update this later
+                            },
+                            {
+                                "name": "DB_HOST",
+                                "value": "rds-endpoint"  # Placeholder - you can update this later
+                            },
+                            {
+                                "name": "DB_PASS",
+                                "value": "dbpassword"  # Placeholder - you can update this later
+                            },
+                            {
+                                "name": "DB_USER",
+                                "value": "username"  # Placeholder - you can update this later
+                            },
+                            {
+                                "name": "AWS_REGION",
+                                "value": self.region
+                            },
+                            {
+                                "name": "ECS_CLUSTER",
+                                "value": infra_name
                             }
                         ],
                         "logConfiguration": {
@@ -61,7 +97,7 @@ class ECSService:
             }
             
             response = self.ecs.register_task_definition(**task_def)
-            print(f"✅ Task Definition created")
+            print(f"✅ Task Definition created with environment variables and port naming")
             return response['taskDefinition']['taskDefinitionArn']
             
         except ClientError as e:

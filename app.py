@@ -144,9 +144,13 @@ def create_security_groups(sg_service, data, infra_name, vpc_id):
     sg_config = {}
     sg_types = data.get('sg_types', [])
     
+    print(f"🛡️ Selected security groups: {sg_types}")
+    
     # Get existing SG IDs from the form data
     existing_sg_alb = data.get('existing_sg_alb')
     existing_sg_server = data.get('existing_sg_server') 
+    existing_sg_rds = data.get('existing_sg_rds')
+    existing_sg_vpn = data.get('existing_sg_vpn')
     
     # Create ALB Security Group
     if 'alb_sg' in sg_types:
@@ -154,18 +158,46 @@ def create_security_groups(sg_service, data, infra_name, vpc_id):
             infra_name, vpc_id, existing_sg_alb
         )
         print(f"✅ ALB Security Group: {sg_config['alb_sg']}")
+    else:
+        print("ℹ️  ALB Security Group not selected")
+    
+    # Create VPN Security Group if selected (create before Server SG for SSH access)
+    if 'vpn_sg' in sg_types:
+        sg_config['vpn_sg'] = sg_service.create_vpn_sg(
+            infra_name, vpc_id, existing_sg_vpn
+        )
+        print(f"✅ VPN Security Group: {sg_config['vpn_sg']}")
+    else:
+        print("ℹ️  VPN Security Group not selected")
     
     # Create Server Security Group
     if 'server_sg' in sg_types:
         sg_config['server_sg'] = sg_service.create_server_sg(
             infra_name, vpc_id, 
             sg_config.get('alb_sg'), 
-            None,  # rds_sg not used for now
+            sg_config.get('vpn_sg'),  # Pass VPN SG for SSH access
             existing_sg_server
         )
         print(f"✅ Server Security Group: {sg_config['server_sg']}")
+    else:
+        print("ℹ️  Server Security Group not selected")
+    
+    # Create RDS Security Group if selected
+    if 'rds_sg' in sg_types:
+        sg_config['rds_sg'] = sg_service.create_rds_sg(
+            infra_name, vpc_id,
+            sg_config.get('server_sg'),  # Allow access from server SG
+            sg_config.get('vpn_sg'),     # Allow access from VPN SG
+            existing_sg_rds
+        )
+        print(f"✅ RDS Security Group: {sg_config['rds_sg']}")
+    else:
+        print("ℹ️  RDS Security Group not selected")
     
     return sg_config
+
+
+
 
 def final_instance_check(ecs_service, cluster_name):
     """Final check for instance registration"""
