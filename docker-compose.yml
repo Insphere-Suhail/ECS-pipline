@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   ecs-infra-creator:
     image: suhail1/insphere-ecs-automation:latest
