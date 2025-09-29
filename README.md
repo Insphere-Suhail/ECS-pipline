@@ -3,16 +3,14 @@
 A powerful web-based tool that automates AWS ECS infrastructure
 deployment with a fully integrated CI/CD pipeline setup.
 
-```{=html}
+
 <p align="center">
-```
-`<img src="https://img.shields.io/badge/AWS-ECS-orange?logo=amazonaws" alt="AWS ECS">`{=html}
-`<img src="https://img.shields.io/badge/Docker-Enabled-blue?logo=docker" alt="Docker Enabled">`{=html}
-`<img src="https://img.shields.io/badge/Python-Flask-green?logo=python" alt="Python Flask">`{=html}
-`<img src="https://img.shields.io/badge/License-MIT-lightgrey" alt="MIT License">`{=html}
-```{=html}
+<img src="https://img.shields.io/badge/AWS-ECS-orange?logo=amazonaws" alt="AWS ECS"> 
+<img src="https://img.shields.io/badge/Docker-Enabled-blue?logo=docker" alt="Docker Enabled"> 
+<img src="https://img.shields.io/badge/Python-Flask-green?logo=python" alt="Python Flask"> 
+<img src="https://img.shields.io/badge/License-MIT-lightgrey" alt="MIT License"> 
 </p>
-```
+
 ## ✨ Features
 
 -   🚀 One-Click ECS Setup -- Deploy complete AWS ECS infrastructure
@@ -201,7 +199,6 @@ Licensed under the MIT License. See the LICENSE file for details.
 -   💰 Cost estimation feature\
 -   🔗 Multi-account deployment support
 
-::: {align="center"}
-`<br>`{=html} `<strong>`{=html}Built with ❤️ using Python, Flask, and
-Docker`</strong>`{=html}
-:::
+
+<strong> Built with ❤️ using Python, Flask, and
+Docker`</strong> 
